@@ -2,15 +2,33 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const DUMMY_ENDPOINT = '/api/terminal';
 
-const App = () => {
+const BANNER = `
+╭───< Ayush Vibe Codes: V1 >─────────┬─────────────────────────────────────╮
+│                                    │ Tips for getting started...         |
+│    Welcome back for Ayush Jalan.   │ Run /info to view resume.md,        |
+│                                    │  or /help if you're feeling lost.   |
+│               /\\_/|                │                                     |
+│              ( -.- )               │ This portfolio was 100% vibe coded. |
+│               z z z                │ 0% planning, 100% confidence.       |
+│                                    │                                     │
+│         Software Engineer          │ Still under construction...         |
+│      ~/ayushjalan/portfolio        │ Why? Because credits ran out... ;)  |
+╰────────────────────────────────────┴─────────────────────────────────────╯
+
+`;
+
+export default function App() {
   const [history, setHistory] = useState([
-    { id: 1, text: "Welcome to Ayush Jalan's portfolio terminal.", type: 'info' },
-    { id: 2, text: 'Completely vibe coded portfolio — this feels slick and immersive.', type: 'vibe' },
-    { id: 3, text: 'Claude Code-style assistant is ready. Send a command below.', type: 'info' },
+    { id: 0, text: BANNER, type: 'banner' },
+    { id: 1, text: "Welcome to Ayush Jalan's portfolio.", type: 'info' },
+    { id: 2, text: 'Completely vibe coded portfolio -> feels slick and immersive.', type: 'vibe' },
+    { id: 3, text: 'Claude Code-style assistant is ready!!! Send a command below...', type: 'info' },
+    { id: 4, text: ' ', type: 'info' },
   ]);
+
   const [input, setInput] = useState('');
-  const [status, setStatus] = useState('Ready when you are!!!');
-  const outputRef = useRef(null);
+  const [status, setStatus] = useState('Ready');
+
   const inputRef = useRef(null);
   const cursorRef = useRef(null);
   const mirrorRef = useRef(null);
@@ -20,86 +38,54 @@ const App = () => {
     inputRef.current?.focus();
   }, []);
 
+  /* Caret sync */
   useEffect(() => {
-    const updateCaret = () => {
+    const updateCursor = () => {
       const inputEl = inputRef.current;
       const cursorEl = cursorRef.current;
       const mirrorEl = mirrorRef.current;
       if (!inputEl || !cursorEl || !mirrorEl) return;
 
-      const selectionStart = inputEl.selectionStart ?? inputEl.value.length;
-      // Mirror the text up to caret to measure width
-      const textBefore = inputEl.value.slice(0, selectionStart) || '';
-      // Replace spaces with nbsp so width matches
-      mirrorEl.textContent = textBefore.replace(/ /g, '\u00A0');
+      const pos = inputEl.selectionStart ?? inputEl.value.length;
 
-      // Ensure mirror uses same font metrics as input
-      const cs = window.getComputedStyle(inputEl);
-      mirrorEl.style.font = cs.font;
-      mirrorEl.style.letterSpacing = cs.letterSpacing;
-      mirrorEl.style.padding = cs.padding;
+      mirrorEl.textContent =
+        inputEl.value.slice(0, pos).replace(/ /g, '\u00A0');
 
-      const mirrorWidth = mirrorEl.getBoundingClientRect().width;
-
-      // account for input padding to align caret exactly with text
-      const paddingLeft = parseFloat(cs.paddingLeft) || 0;
-
-      // positioning relative to input element using offsetLeft for accuracy
-      // subtract paddingLeft so caret sits over characters rather than after padding
-      const left = mirrorWidth + inputEl.offsetLeft - inputEl.scrollLeft + 2 - paddingLeft;
-
-      cursorEl.style.left = `${left}px`;
+      const rect = mirrorEl.getBoundingClientRect();
+      cursorEl.style.left = `${rect.width}px`;
     };
 
-    // update on input and selection changes
     const el = inputRef.current;
-    el?.addEventListener('input', updateCaret);
-    el?.addEventListener('keydown', updateCaret);
-    el?.addEventListener('keyup', updateCaret);
-    el?.addEventListener('click', updateCaret);
-    el?.addEventListener('scroll', updateCaret);
-
-    // initial update
-    updateCaret();
+    el?.addEventListener('input', updateCursor);
+    el?.addEventListener('click', updateCursor);
+    updateCursor();
 
     return () => {
-      el?.removeEventListener('input', updateCaret);
-      el?.removeEventListener('keydown', updateCaret);
-      el?.removeEventListener('keyup', updateCaret);
-      el?.removeEventListener('click', updateCaret);
-      el?.removeEventListener('scroll', updateCaret);
+      el?.removeEventListener('input', updateCursor);
+      el?.removeEventListener('click', updateCursor);
     };
   }, []);
 
+  /* Auto-scroll */
   useLayoutEffect(() => {
-    // Use a bottom sentinel and scroll it into view — more deterministic
-    const sentinel = endRef.current;
-    const container = outputRef.current;
-    if (!container || !sentinel) return;
-
-    const scrollToEnd = () => {
-      try {
-        sentinel.scrollIntoView({ block: 'end', behavior: 'auto' });
-      } catch (e) {
-        container.scrollTop = container.scrollHeight;
-      }
-    };
-
-    // Try after layout settles
-    requestAnimationFrame(() => requestAnimationFrame(scrollToEnd));
-    const t = setTimeout(scrollToEnd, 50);
-
-    return () => clearTimeout(t);
+    endRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [history.length]);
 
   const addHistory = (text, type = 'command') => {
-    setHistory((current) => [...current, { id: Date.now(), text, type }]);
+    setHistory((h) => [...h, { id: Date.now(), text, type }]);
   };
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
+
     const command = input.trim();
-    addHistory(`ayush@portfolio:~$ ${command}`, 'command');
+    addHistory(
+      { prompt: 'ayush@portfolio:~$', command },
+      'command'
+    );
+    requestAnimationFrame(() => {
+      if (cursorRef.current) cursorRef.current.style.left = '0px';
+    });
     setInput('');
     setStatus('Sending...');
 
@@ -110,106 +96,152 @@ const App = () => {
         body: JSON.stringify({ command }),
       });
       addHistory(`Sent to ${DUMMY_ENDPOINT} (dummy endpoint).`, 'info');
-    } catch (error) {
+    } catch {
       addHistory('Error: Unable to reach backend endpoint.', 'error');
     } finally {
       setStatus('Ready');
     }
   };
 
-  const handleKeyDown = (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const handleClear = () => {
-    setHistory([]);
-  };
-
-  const focusInput = () => {
-    inputRef.current?.focus();
-  };
-
   return (
-    <div className="terminal-shell fullscreen">
-      <div className="terminal-header">
-        <div className="banner-box">
-          <pre className="banner-text">
-{`╭─── Ayush Vibe Codes v1 ─────────────────────────────────────────╮
-│                                    │ Tips for getting started...         |
-│    Welcome back for Ayush Jalan.   │ Run /info to view resume.md,        |
-│                                    │  or /help if you're feeling lost.   |
-│               /\\_/|                │                                     |
-│              ( -.- )               │ This portfolio was 100% vibe coded. |
-│               z z z                │ 0% planning, 100% confidence.       |
-│                                    │                                     │
-│         Software Engineer          │ Still under construction...         |
-│      ~/ayushjalan/portfolio        │ Why? Because credits ran out... ;)  |
-╰──────────────────────────────────────────────────────────────╯`}</pre>
-        </div>
-      </div>
+    <div className="h-screen w-screen bg-black text-zinc-100 font-mono overflow-hidden">
+      <div className="flex h-full flex-col px-8 pb-24 bg-[radial-gradient(circle_at_top_left,rgba(56,110,255,0.08),transparent_22%),linear-gradient(180deg,#0a0a0a_0%,#040404_100%)]">
 
-      <div className="terminal-body">
-        <div className="terminal-output" ref={outputRef}>
-          {history.map((entry) => (
-            <div key={entry.id} className={`terminal-line ${entry.type}`}>
-              {entry.text}
-            </div>
-          ))}
-          <div ref={endRef} aria-hidden="true" />
+        {/* OUTPUT */}
+        <div className="flex-1 overflow-y-auto p-4 
+            scrollbar-thin
+            scrollbar-thumb-slate-500/40
+            scrollbar-track-transparent
+            hover:scrollbar-thumb-slate-400/70
+            scrollbar-thumb-rounded-full">
+          {history.map((e) =>
+            e.type === 'banner' ? (
+              <pre
+                key={e.id}
+                className="text-xl whitespace-pre overflow-x-auto bg-gradient-to-r from-red-300 via-cyan-400 to-red-900 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(0, 0,255,0.7)]"
+              >
+                {e.text}
+              </pre>
+            ) : e.type === 'command' && typeof e.text === 'object' ? (
+              <div
+                key={e.id}
+                className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed"
+              >
+                <span className="text-cyan-400 font-semibold">
+                  {e.text.prompt}
+                </span>{' '}
+                <span className="text-sky-100">
+                  {e.text.command}
+                </span>
+              </div>
+            ) : (
+              <div
+                key={e.id}
+                className={
+                  'whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed ' +
+                  (e.type === 'info'
+                    ? 'text-zinc-400'
+                    : e.type === 'vibe'
+                      ? 'text-cyan-300 drop-shadow-[0_0_18px_rgba(169,240,255,0.25)]'
+                      : e.type === 'error'
+                        ? 'text-red-400'
+                        : 'text-zinc-100')
+                }
+              >
+                {e.text}
+              </div>
+            )
+          )}
+          <div ref={endRef} />
         </div>
 
-        <div className="terminal-panel">
-          <div className="panel-row">
-            <span className="panel-label">assistant</span>
-            <span className="panel-chip">context</span>
-          </div>
-          <pre className="code-block">
-{`# sample command list
-help       Display available actions
-status     Show current session status
-deploy     Mock deployment flow`}
-          </pre>
-        </div>
+        {/* INPUT */}
+        <div className="fixed bottom-2 left-6 right-6 space-y-2">
+          <div
+            className="relative flex items-center gap-4 rounded-2xl border border-sky-400/30 bg-slate-900/95 px-5 py-4 cursor-text"
+            onClick={() => inputRef.current?.focus()}
+          >
+            <span className="text-cyan-300 font-bold">❯</span>
 
-        <div className="terminal-fixed" onClick={focusInput}>
-          <div className="terminal-input-row">
-            <div className="terminal-input-wrap">
-              <span>❯ </span>
+            <div className="relative flex-1">
               <input
                 ref={inputRef}
-                className="terminal-input"
-                type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Enter command..."
-                spellCheck="false"
-                aria-label="Terminal command input"
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                className="
+                  w-full
+                  bg-transparent
+                  outline-none
+                  caret-transparent
+                  text-sky-100
+                  font-mono
+                "
+                spellCheck={false}
               />
-              <span ref={cursorRef} className="insert-caret" aria-hidden="true" />
-              <div ref={mirrorRef} className="input-mirror" aria-hidden="true" />
+
+              {/* BLOCK CURSOR */}
+              <span
+                ref={cursorRef}
+                className="
+                  absolute
+                  top-1/2
+                  -translate-y-1/2
+                  h-5
+                  w-[10px]
+                  bg-sky-200
+                  animate-pulse
+                  pointer-events-none
+                "
+              />
+
+              {!input && (
+                <span
+                  className="
+                    absolute
+                    left-0
+                    top-1/2
+                    -translate-y-1/2
+                    text-sky-100/40
+                    font-mono
+                    pointer-events-none
+                    select-none
+                  "
+                >
+                  Enter command…
+                </span>
+              )}
+
+              {/* TEXT MIRROR */}
+              <span
+                ref={mirrorRef}
+                className="
+                  absolute
+                  invisible
+                  whitespace-pre
+                  font-mono
+                  text-base
+                "
+              />
             </div>
           </div>
 
-          <div className="terminal-actions">
-            <button className="action-button" type="button" onClick={handleSubmit}>
-              Send
-            </button>
-            <button className="action-button" type="button" onClick={handleClear}>
-              Clear
-            </button>
-            <button className="action-button" type="button" onClick={focusInput}>
-              Focus
-            </button>
-            <span className="status-label">{status}</span>
+          {/* HINTS */}
+          <div className="flex flex-wrap gap-3 px-2 text-xs text-zinc-400">
+            <span>
+              Try <span className="text-cyan-300">/help.</span>
+            </span>
+            <span>
+              Run <span className="text-cyan-300">/info</span> to view resume.md.
+            </span>
+            <span>
+              Type <span className="text-cyan-300">/status</span> to check session
+            </span>
+
+            <span className="ml-auto text-cyan-300">{status}</span>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default App;
+}
